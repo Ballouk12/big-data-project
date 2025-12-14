@@ -1,0 +1,209 @@
+version: '3.8'
+
+services:
+  # ---------------------------
+  # Zookeeper
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: zookeeper-bd
+    networks:
+      - bigdata-net
+    environment:
+      - ZOO_MY_ID=1
+      - ZOO_SERVERS=server.1=zookeeper-bd:2888:3888;2181
+    ports:
+      - "2181:2181"
+
+  # ---------------------------
+  # Kafka
+  kafka:
+    image: wurstmeister/kafka:2.13-2.8.1
+    container_name: kafka-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper-bd:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-bd:9092
+      - KAFKA_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+
+  # ---------------------------
+  # Hadoop Namenode
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+
+  # ---------------------------
+  # Hadoop Datanode
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+
+  # ---------------------------
+  # HBase Standalone
+  hbase-standalone:
+    image: harisekhon/hbase:latest
+    container_name: hbase-standalone-bd
+    hostname: hbase-standalone-bd
+    networks:
+      - bigdata-net
+    ports:
+     - "49160:49160"
+     - "49161:49161"
+    volumes:
+      - hbase-data:/hbase-data
+      - shared-data:/data
+    environment:
+      HBASE_MANAGES_ZK: "false"
+      HBASE_CONF_hbase_zookeeper_quorum: "zookeeper-bd"
+      HBASE_CONF_hbase_master_hostname: "hbase-standalone-bd"
+
+  # ---------------------------
+  # ---------------------------
+  # Spark Master
+  spark-master:
+    build:
+      context: ./spark_build
+      dockerfile: Dockerfile
+    image: spark-custom:latest
+    container_name: spark-master-bd
+    networks:
+      - bigdata-net
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+      - SPARK_HOME=/spark
+      - PYSPARK_PYTHON=python3
+    volumes:
+      - ./spark_apps:/opt/spark-apps
+      - shared-data:/data
+
+  # ---------------------------
+  # ---------------------------
+  # Spark Worker
+  spark-worker:
+    build:
+      context: ./spark_build
+      dockerfile: Dockerfile
+    image: spark-custom:latest
+    container_name: spark-worker-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    environment:
+      - SPARK_MASTER=spark://spark-master-bd:7077
+      - SPARK_HOME=/spark
+      - PYSPARK_PYTHON=python3
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+    command: "/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master-bd:7077"
+
+  # ---------------------------
+  # Zeppelin avec Spark
+  zeppelin:
+    build:
+      context: ./zeppelin
+      dockerfile: Dockerfile
+    container_name: zeppelin-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - spark-master
+      - hbase-standalone
+    ports:
+      - "9999:8080"
+    environment:
+      - MASTER=spark://spark-master-bd:7077
+      - SPARK_HOME=/opt/spark
+      - ZEPPELIN_ADDR=0.0.0.0
+      - ZEPPELIN_PORT=8080
+      - SPARK_MASTER_URL=spark://spark-master-bd:7077
+    volumes:
+      - ./zeppelin/notebooks:/opt/zeppelin/notebook
+      - ./spark_apps:/opt/spark-apps
+      - shared-data:/data
+
+  # ---------------------------
+  # Flume Agent
+  flume:
+    image: probablyfine/flume:2.0.0
+    container_name: flume-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - zookeeper
+      - kafka
+    volumes:
+      - ./flume/conf:/opt/flume-config
+      - shared-data:/data
+    environment:
+      - FLUME_AGENT_NAME=a1
+      - FLUME_CONF_FILE=/opt/flume-config/flume-conf.properties
+    command: agent -n a1 -c conf -f /opt/flume-config/flume-conf.properties -Dflume.root.logger=INFO,console
+
+  # ---------------------------
+  # Producer Batch (HBase Loading)
+  producer:
+    build: ./producer
+    container_name: producer-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - shared-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    depends_on:
+      - hbase-standalone
+
+  # ---------------------------
+  # Producer Kafka (Streaming Pipeline)
+  kafka-producer:
+    build: ./producer
+    container_name: kafka-producer-bd
+    networks:
+      - bigdata-net
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    restart: always
+    depends_on:
+      - kafka
+    command: ["python", "-u", "producer_kafka.py"]
+
+networks:
+  bigdata-net:
+    driver: bridge
+
+volumes:
+  namenode:
+  datanode:
+  hbase-data:
+  shared-data:

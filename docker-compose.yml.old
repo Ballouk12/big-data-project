@@ -1,0 +1,203 @@
+services:
+  # ---------------------------
+  # Zookeeper (Coordination)
+  # ---------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper-bd
+    networks:
+      - bigdata-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  # ---------------------------
+  # Kafka (Message Broker)
+  # ---------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-bd:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-bd:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  # ---------------------------
+  # Hadoop Namenode
+  # ---------------------------
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+
+  # ---------------------------
+  # Hadoop Datanode
+  # ---------------------------
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - datanode:/hadoop/dfs/data
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+
+  # ---------------------------
+  # HBase Master
+  # ---------------------------
+  hbase-master:
+    image: harisekhon/hbase:1.2.6
+    container_name: hbase-master-bd
+    networks:
+      - bigdata-net
+    environment:
+      - HBASE_CONF_hbase_rootdir=hdfs://namenode-bd:9000/hbase
+      - HBASE_CONF_hbase_zookeeper_quorum=zookeeper-bd
+      - HBASE_CONF_hbase_cluster_distributed=true
+    depends_on:
+      - zookeeper
+      - namenode
+      - datanode
+    ports:
+      - "16010:16010"
+
+  # ---------------------------
+  # HBase RegionServer
+  # ---------------------------
+  hbase-regionserver:
+    image: harisekhon/hbase:1.2.6
+    container_name: hbase-regionserver-bd
+    networks:
+      - bigdata-net
+    environment:
+      - HBASE_CONF_hbase_rootdir=hdfs://namenode-bd:9000/hbase
+      - HBASE_CONF_hbase_zookeeper_quorum=zookeeper-bd
+      - HBASE_CONF_hbase_cluster_distributed=true
+      - HBASE_REGIONSERVER_HOSTNAME=hbase-regionserver-bd
+    depends_on:
+      - zookeeper
+      - namenode
+      - hbase-master
+
+  # ---------------------------
+  # Flume (Ingestion)
+  # ---------------------------
+  flume:
+    image: sequenceiq/flume:1.6.0
+    container_name: flume-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - kafka
+      - zookeeper
+    volumes:
+      - ./flume/conf:/opt/flume-config
+      - shared-data:/data
+    environment:
+      - FLUME_AGENT_NAME=a1
+    command: flume-ng agent -c /opt/flume-config -f /opt/flume-config/flume.conf -n a1 -Dflume.root.logger=INFO,console
+
+  # ---------------------------
+  # Spark Master
+  # ---------------------------
+  spark-master:
+    image: bitnami/spark:3.3.2
+    container_name: spark-master-bd
+    networks:
+      - bigdata-net
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    environment:
+      - SPARK_MODE=master
+    volumes:
+      - ./spark_apps:/opt/spark-apps
+      - shared-data:/data
+
+  # ---------------------------
+  # Spark Worker
+  # ---------------------------
+  spark-worker:
+    image: bitnami/spark:3.3.2
+    container_name: spark-worker-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+
+  # ---------------------------
+  # Zeppelin (Notebooks & Viz)
+  # ---------------------------
+  zeppelin:
+    image: apache/zeppelin:0.10.1
+    container_name: zeppelin-bd
+    networks:
+      - bigdata-net
+    depends_on:
+      - spark-master
+      - namenode
+    ports:
+      - "8888:8080"
+    environment:
+      - ZEPPELIN_PORT=8080
+      - ZEPPELIN_ADDR=0.0.0.0
+      - SPARK_MASTER=spark://spark-master-bd:7077
+      - SPARK_HOME=/opt/bitnami/spark
+      - MASTER=spark://spark-master-bd:7077
+    volumes:
+      - ./zeppelin/notebooks:/opt/zeppelin/notebook
+      - ./zeppelin/conf:/opt/zeppelin/conf
+      - ./spark_apps:/opt/spark-apps
+      - shared-data:/data
+
+  # ---------------------------
+  # Producer (Python App)
+  # ---------------------------
+  producer:
+    build: ./producer
+    container_name: producer-bd
+    networks:
+      - bigdata-net
+    volumes:
+      - shared-data:/data
+    restart: always
+
+networks:
+  bigdata-net:
+    driver: bridge
+
+volumes:
+  namenode:
+  datanode:
+  shared-data:
