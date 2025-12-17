@@ -1,4 +1,4 @@
-# Big Data Weather Pipeline: Real-time Ingestion, ETL & Machine Learning
+# Big Data Weather Pipeline: Real-time Ingestion & Machine Learning
 
 A comprehensive big data project featuring a robust real-time data pipeline, lambda architecture for batch and speed layers, and integrated Machine Learning for weather prediction.
 
