@@ -16,7 +16,8 @@ This project provides a complete end-to-end data platform:
 # Architecture of our project
 
 <!-- Replace with your specific architecture execution flow if different -->
-<img width="1024" alt="Project Architecture" src="https://github.com/user-attachments/assets/placeholder-architecture" />
+![architecture](https://github.com/user-attachments/assets/c81347bc-33d8-48b2-bc50-f46faa90f602)
+
 
 ## 🏗️ Project Structure
 
