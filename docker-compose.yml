@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ---------------------------
   # Zookeeper
@@ -154,7 +152,7 @@ services:
   # ---------------------------
   # Flume Agent
   flume:
-    image: probablyfine/flume:2.0.0
+    image: bde2020/flume
     container_name: flume-bd
     networks:
       - bigdata-net
@@ -167,7 +165,8 @@ services:
     environment:
       - FLUME_AGENT_NAME=a1
       - FLUME_CONF_FILE=/opt/flume-config/flume-conf.properties
-    command: agent -n a1 -c conf -f /opt/flume-config/flume-conf.properties -Dflume.root.logger=INFO,console
+    entrypoint: /bin/bash
+    command: -c "$$FLUME_HOME/bin/flume-ng agent -n a1 -c /opt/flume-config -f /opt/flume-config/flume-conf.properties -Dflume.root.logger=INFO,console"
 
   # ---------------------------
   # Producer Batch (HBase Loading)

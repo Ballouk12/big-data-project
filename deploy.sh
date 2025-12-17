@@ -140,11 +140,18 @@ echo "🔨 Build de l'image Zeppelin (peut prendre quelques minutes)..."
 docker-compose build zeppelin
 
 echo ""
-echo "🚀 Démarrage des services..."
-docker-compose up -d
+echo "🚀 Démarrage des conteneurs..."
+docker-compose up -d --build
 
-# 6. Attente et vérification
-echo ""
+echo "⏳ Attente de 15s pour l'initialisation..."
+sleep 15
+
+echo "🔌 Démarrage du serveur Thrift HBase..."
+docker exec -d hbase-standalone-bd hbase thrift start
+echo "✅ Serveur Thrift démarré"
+
+echo "🔄 Redémarrage du producer pour prendre en compte HBase..."
+docker restart producer-bd
 echo "⏳ Attente du démarrage (60 secondes)..."
 sleep 60
 

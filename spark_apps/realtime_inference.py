@@ -10,7 +10,7 @@ from pyspark.ml.feature import VectorAssembler
 KAFKA_BROKER = "kafka-bd:9092"
 INPUT_TOPIC = "weather-live"
 # Chemin HDFS du modèle entraîné
-MODEL_PATH = "hdfs://namenode-bd:9000/user/zeppelin/weather_rf_model"
+MODEL_PATH = "hdfs://namenode-bd:9000/user/zeppelin/weather_rf_model_v2"
 
 def main():
     spark = SparkSession.builder \
@@ -132,7 +132,7 @@ def main():
         print("⚠️ Falling back to displaying raw data...")
         output_df = df_parsed
 
-    # 6. Write predictions to Console (not HBase)
+    # 6. Write predictions to Console 
     print("🚀 Starting Streaming - Predictions will be displayed below:")
     query = output_df.writeStream \
         .outputMode("append") \
