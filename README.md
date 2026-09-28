@@ -6,7 +6,7 @@ A comprehensive big data project featuring a robust real-time data pipeline, lam
 
 ## 📋 Overview
 
-This project provides a complete end-to-end data platform:
+This project provides a complete end-to-end data platform :
 
 1.  **Real-time Data Ingestion**: Automated collection of weather data using Kafka and Flume.
 2.  **Hybrid Processing Architecture**: Leveraging Apache Spark for both streaming inference and batch model training.
