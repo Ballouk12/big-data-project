@@ -211,8 +211,6 @@ This project is licensed under the MIT License.
 ## 👥 Authors
 
 -   **Ballouk Mohamed** - [GitHub Profile](https://github.com/Ballouk12)
--   **Sakhr Niama**
--   **Boukhrais Meryem**
 
 ## 🙏 Acknowledgments
 
